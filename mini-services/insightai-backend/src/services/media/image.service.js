@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ERROR_CODES, AppError } = require('../../utils/errorCodes');
-const { runTask } = require('../ai/providerManager');
+const { runJSON } = require('../ai/providerManager');
 const aiCache = require('../ai/aiCache');
 const logger = require('../../utils/logger');
 
@@ -55,7 +55,7 @@ async function analyzeImage(fileId, diskPath, mimeType, fileName) {
       provider = hit.provider;
       model = hit.model;
     } else {
-      const res = await runTask('vision', {
+      const res = await runJSON('vision', {
         system: VISION_SYSTEM,
         user: `Analyze this image ("${fileName}"). Respond with the JSON structure from your instructions.`,
         images: [{ mimeType: mimeType || 'image/png', base64 }],
@@ -64,7 +64,7 @@ async function analyzeImage(fileId, diskPath, mimeType, fileName) {
         maxTokens: 1600,
         label: 'image-analysis',
       });
-      analysis = require('../ai/providerManager').extractJson(res.text);
+      analysis = res.data;
       provider = res.provider;
       model = res.model;
       require('../../storage/manager').setCache(cached, { op: 'image_analysis', data: analysis, provider, model });

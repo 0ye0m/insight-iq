@@ -121,7 +121,13 @@ export default function DashboardView() {
                       <StatusDot tone={info.configured ? 'orange' : 'gray'} />
                       {name}
                       <span className="text-xs text-muted-foreground">
-                        {info.configured ? `${info.keys.length} key slot${info.keys.length === 1 ? '' : 's'}` : 'not configured'}
+                        {info.mode === 'managed-fallback'
+                          ? info.configured
+                            ? 'managed fallback · ready'
+                            : 'disabled'
+                          : info.configured
+                            ? `${info.keys.length} key slot${info.keys.length === 1 ? '' : 's'}`
+                            : 'not configured'}
                         {info.keys.some((k) => k.coolingDown) ? ' · cooling down' : ''}
                         {info.keys.some((k) => k.lastError === 'key rejected') ? ' · key rejected' : ''}
                       </span>

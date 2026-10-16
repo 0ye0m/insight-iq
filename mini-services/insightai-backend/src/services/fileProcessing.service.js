@@ -245,7 +245,7 @@ async function analyzeFile(fileId, { objective } = {}) {
       planner: plannerMeta,
       results,
       explanation: explanation.explanation,
-      explainer: { provider: explanation.provider, model: explanation.model, cached: explanation.cached || false },
+      explainer: { provider: explanation.provider, model: explanation.model, cached: explanation.cached || false, aiError: explanation.aiError || null },
       critic: criticMeta,
       aiAvailable: Boolean(explanation.provider || planResult.provider),
       completedAt: new Date().toISOString(),

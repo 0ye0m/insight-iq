@@ -37,6 +37,8 @@ export interface ProviderStatus {
       configured: boolean;
       models: string[];
       keys: ProviderKeyStatus[];
+      mode?: string;
+      note?: string;
     }
   >;
   budget: { day: string; used: number; limit: number };

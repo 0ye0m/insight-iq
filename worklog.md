@@ -82,3 +82,29 @@ Work Log:
 Stage Summary:
 - All regressions fixed; application verified end-to-end again in the browser
 - .env (git-ignored) holds the 6 user-supplied dummy keys; .env.example provides the clean template; swapping real keys in requires zero code changes
+
+---
+Task ID: 12
+Agent: orchestrator (Z.ai Code)
+Task: Diagnose "Groq key rejected" + add managed platform AI fallback provider
+
+Work Log:
+- Diagnosed provider rejections with direct curl tests against both APIs from the sandbox:
+  - Groq keys 1-3: HTTP 403 {"error":{"message":"Forbidden"}} — Groq blocks this server's region/datacenter IP
+  - Gemini keys 1-3: HTTP 400 "User location is not supported for the API use." — Google geo-block
+  - Egress: 47.57.232.232 (Hong Kong, Alibaba Cloud) — both vendors exclude HK from supported regions; keys never reach auth validation
+- Implemented managed platform fallback provider (no user keys, server-side SDK):
+  - New Next.js routes /api/ai/llm + /api/ai/vision (z-ai-web-dev-sdk, backend-only), guarded by shared secret INTERNAL_AI_PROXY_TOKEN in root .env (x-forwarded-for check was infeasible: Next dev injects forwarded headers)
+  - providerManager.js: platform candidates appended LAST to every TASK_ROUTES entry; callPlatform() proxies to Next with token; runTask handles keyState=null candidates; getStatus()+pingProviders() expose platform (mode: managed-fallback)
+  - config: ai.platformEnabled (PLATFORM_AI_DISABLED to opt out), ai.nextHost
+  - DashboardView: platform row renders "Managed fallback · ready"; ProviderStatus type extended
+- Hardened AI output parsing (fixes transient "Model response was not valid JSON"):
+  - extractJson: balanced-brace extraction (string/escape aware) + repairs (smart quotes, trailing commas, NaN/Infinity) + re-extraction; unit-tested (fenced/prose-wrapped/repaired/throw cases)
+  - image.service + video.service switched from runTask+extractJson to runJSON (automatic stricter-JSON retry)
+  - fileProcessing: explainer aiError now surfaced in response metadata
+- E2E verified: provider test (gemini fail-region, groq fail-region, platform OK 384ms); analyze on q3_sales.csv (planner/critic/explainer ALL platform; 3 evidence-cited findings with exact numbers); chat refuses to speculate beyond data (grounded: ai-context); image understanding (correct OCR "INSIGHTIQ TEST CARD", category, description via glm-managed-vision); video understanding (2 frames described + AI synthesis with subjects/timeline); dashboard provider panel correct; lint clean
+
+Stage Summary:
+- Root cause of "key rejected": vendor geo-blocking of the sandbox's Hong Kong egress IP — NOT invalid keys and NOT an app bug
+- AI features now fully operational via the managed platform fallback; Gemini/Groq keys remain first in routing and take over automatically when the app runs from a supported region
+- Security: platform proxies are internal-only (shared secret), keys stay server-side and masked

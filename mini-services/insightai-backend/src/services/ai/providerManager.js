@@ -65,6 +65,11 @@ function budgetCheck() {
 
 // ─── Task routing table ────────────────────────────────────────────────
 // Ordered candidates per task type. Vision tasks skip text-only models.
+// The managed platform provider (no user keys, server-side) is appended LAST
+// to every route: it only engages when all Gemini/Groq keys are unavailable.
+const PLATFORM_TEXT = { provider: 'platform', model: 'glm-managed', caps: ['text', 'json'] };
+const PLATFORM_VISION = { provider: 'platform', model: 'glm-managed-vision', caps: ['vision', 'json'] };
+
 const TASK_ROUTES = {
   planner: [
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['json'] },
@@ -72,34 +77,40 @@ const TASK_ROUTES = {
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['json'] },
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['json'] },
     { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['json'] },
+    PLATFORM_TEXT,
   ],
   explainer: [
     { provider: 'groq', model: 'llama-3.3-70b-versatile', caps: ['json'] },
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['json'] },
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['json'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['json'] },
+    PLATFORM_TEXT,
   ],
   critic: [
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['json'] },
     { provider: 'groq', model: 'llama-3.3-70b-versatile', caps: ['json'] },
     { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['json'] },
+    PLATFORM_TEXT,
   ],
   chat: [
     { provider: 'groq', model: 'llama-3.3-70b-versatile', caps: ['text'] },
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['text'] },
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['text'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['text'] },
+    PLATFORM_TEXT,
   ],
   vision: [
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['vision', 'json'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['vision', 'json'] },
     { provider: 'groq', model: 'meta-llama/llama-4-scout-17b-16e-instruct', caps: ['vision'] },
     { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['vision', 'json'] },
+    PLATFORM_VISION,
   ],
   summary: [
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['text'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['text'] },
     { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['text'] },
+    PLATFORM_TEXT,
   ],
 };
 
@@ -117,6 +128,11 @@ function candidateOrder(taskType, { preferProvider } = {}) {
   }
   const expanded = [];
   for (const route of routes) {
+    if (route.provider === 'platform') {
+      // managed provider — no user keys involved
+      if (config.ai.platformEnabled) expanded.push({ ...route, keyState: null, modelDef: { id: route.model, capabilities: route.caps } });
+      continue;
+    }
     const modelDef = config.providers[route.provider].models.find((m) => m.id === route.model);
     if (!modelDef) continue;
     for (const keyState of keysForProvider(route.provider)) {
@@ -239,19 +255,88 @@ async function callGroq({ key, model, system, user, images, jsonMode, temperatur
   };
 }
 
+// Managed platform provider — internal Next.js proxy (server-side SDK).
+async function callPlatform({ system, user, images, jsonMode, maxTokens, timeoutMs }) {
+  const endpoint = images && images.length ? '/api/ai/vision' : '/api/ai/llm';
+  const res = await fetch(`${config.ai.nextHost}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-token': process.env.INTERNAL_AI_PROXY_TOKEN || '',
+    },
+    body: JSON.stringify({ system, user, jsonMode, maxTokens, images }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { /* leave null */ }
+  if (!res.ok || !data?.success) {
+    const err = new Error(`Platform ${res.status}: ${data?.error?.message || text.slice(0, 160)}`);
+    err.status = res.status >= 500 ? 503 : res.status;
+    throw err;
+  }
+  return { text: String(data.text || ''), tokensIn: 0, tokensOut: 0 };
+}
+
 // ─── Extract JSON defensively ──────────────────────────────────────────
-function extractJson(text) {
-  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  try { return JSON.parse(cleaned); } catch { /* try braces */ }
-  const start = cleaned.search(/[[{]/);
-  if (start >= 0) {
-    const openCh = cleaned[start];
-    const closeCh = openCh === '{' ? '}' : ']';
-    const end = cleaned.lastIndexOf(closeCh);
-    if (end > start) {
-      try { return JSON.parse(cleaned.slice(start, end + 1)); } catch { /* fallthrough */ }
+function balancedJsonSlice(text) {
+  // Walk the text and return the first complete, balanced {...} or [...] block
+  // (string- and escape-aware). Handles prose-wrapped JSON reliably.
+  const openCh = text.search(/[[{]/);
+  if (openCh < 0) return null;
+  const pairs = { '{': '}', '[': ']' };
+  const stack = [];
+  let inStr = false;
+  let esc = false;
+  for (let i = openCh; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') {
+      const open = stack.pop();
+      if (!open || pairs[open] !== ch) return null;
+      if (stack.length === 0) return text.slice(openCh, i + 1);
     }
   }
+  return null;
+}
+
+function extractJson(text) {
+  const cleaned = String(text || '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  // 1) direct parse
+  try { return JSON.parse(cleaned); } catch { /* continue */ }
+
+  // 2) balanced-brace extraction (prose-wrapped JSON)
+  const sliced = balancedJsonSlice(cleaned);
+  if (sliced) {
+    try { return JSON.parse(sliced); } catch { /* continue */ }
+  }
+
+  // 3) common near-JSON repairs: smart quotes, trailing commas, NaN/Infinity
+  const base = sliced || cleaned;
+  const repaired = base
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/\b(NaN|Infinity|-Infinity)\b/g, 'null');
+  try { return JSON.parse(repaired); } catch { /* fallthrough */ }
+
+  // 4) repaired + balanced re-extraction
+  const resliced = balancedJsonSlice(repaired);
+  if (resliced) {
+    try { return JSON.parse(resliced); } catch { /* fallthrough */ }
+  }
+
   throw new Error('Model response was not valid JSON');
 }
 
@@ -263,8 +348,8 @@ function extractJson(text) {
  * hard-failed request body.
  */
 async function runTask(taskType, { system, user, images = [], jsonMode = false, temperature, maxTokens, timeoutMs, preferProvider, label = taskType }) {
-  if (keyStates.length === 0) {
-    throw new ProviderError('No AI provider keys are configured. AI features are disabled; deterministic results are still available.', { code: 'AI_NOT_CONFIGURED', status: 503 });
+  if (keyStates.length === 0 && !config.ai.platformEnabled) {
+    throw new ProviderError('No AI provider keys are configured and the platform fallback is disabled. AI features are off; deterministic results are still available.', { code: 'AI_NOT_CONFIGURED', status: 503 });
   }
   const used = budgetCheck();
   if (used >= config.ai.dailyRequestBudget) {
@@ -282,23 +367,27 @@ async function runTask(taskType, { system, user, images = [], jsonMode = false, 
 
   for (const cand of candidates) {
     const ks = cand.keyState;
-    if (ks.cooldownUntil > now) {
-      attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks.id}`, skipped: 'cooldown' });
-      continue;
+    if (ks) {
+      if (ks.cooldownUntil > now) {
+        attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks.id}`, skipped: 'cooldown' });
+        continue;
+      }
+      if (ks.lastError && ks.lastError.hardInvalid) continue;
     }
-    if (ks.lastError && ks.lastError.hardInvalid) continue;
 
     const maxAttempts = config.ai.maxRetries + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         budgetCounters.used += 1;
-        ks.requests += 1;
-        ks.lastUsedAt = new Date().toISOString();
+        if (ks) {
+          ks.requests += 1;
+          ks.lastUsedAt = new Date().toISOString();
+        }
         roundRobin += 1;
 
-        const fn = cand.provider === 'gemini' ? callGemini : callGroq;
+        const fn = cand.provider === 'gemini' ? callGemini : cand.provider === 'groq' ? callGroq : callPlatform;
         const result = await fn({
-          key: ks.key,
+          key: ks ? ks.key : undefined,
           model: cand.model,
           system,
           user,
@@ -308,25 +397,27 @@ async function runTask(taskType, { system, user, images = [], jsonMode = false, 
           maxTokens: maxTokens || 4096,
           timeoutMs: perAttemptTimeout,
         });
-        ks.tokensIn += result.tokensIn;
-        ks.tokensOut += result.tokensOut;
-        ks.lastError = null;
-        ks.consecutiveFailures = 0;
-        logger.info({ task: label, provider: cand.provider, model: cand.model, key: ks.id, tokensIn: result.tokensIn, tokensOut: result.tokensOut }, 'AI call ok');
-        return { text: result.text, provider: cand.provider, model: cand.model, keyId: ks.id };
+        if (ks) {
+          ks.tokensIn += result.tokensIn;
+          ks.tokensOut += result.tokensOut;
+          ks.lastError = null;
+          ks.consecutiveFailures = 0;
+        }
+        logger.info({ task: label, provider: cand.provider, model: cand.model, key: ks ? ks.id : 'managed', tokensIn: result.tokensIn, tokensOut: result.tokensOut }, 'AI call ok');
+        return { text: result.text, provider: cand.provider, model: cand.model, keyId: ks ? ks.id : 'managed' };
       } catch (err) {
         const status = err.status || 0;
-        attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks.id}`, attempt, error: String(err.message).slice(0, 160), status });
-        logger.warn({ task: label, provider: cand.provider, model: cand.model, key: ks.id, status, attempt, error: String(err.message).slice(0, 200) }, 'AI call failed');
+        attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks ? ks.id : 'managed'}`, attempt, error: String(err.message).slice(0, 160), status });
+        logger.warn({ task: label, provider: cand.provider, model: cand.model, key: ks ? ks.id : 'managed', status, attempt, error: String(err.message).slice(0, 200) }, 'AI call failed');
 
-        if (status === 429) {
+        if (ks && status === 429) {
           ks.errors429 += 1;
           const ra = err.retryAfter && err.retryAfter > 0 ? err.retryAfter * 1000 : Math.min(60000, 5000 * Math.pow(2, ks.errors429));
           ks.cooldownUntil = Date.now() + ra + Math.floor(Math.random() * 1000);
           ks.lastError = { message: 'rate limited', at: new Date().toISOString(), hardInvalid: false };
           break; // move to next key/model — do not hammer the same key
         }
-        if (status === 401 || status === 403) {
+        if (ks && (status === 401 || status === 403)) {
           ks.lastError = { message: 'key rejected', at: new Date().toISOString(), hardInvalid: true };
           break; // invalid key — stop using it
         }
@@ -400,6 +491,13 @@ function getStatus() {
         })),
     };
   }
+  byProvider.platform = {
+    configured: config.ai.platformEnabled,
+    mode: 'managed-fallback',
+    models: ['glm-managed', 'glm-managed-vision'],
+    keys: [],
+    note: 'Server-managed fallback — no user keys. Engages automatically when every Gemini/Groq key is unavailable.',
+  };
   return {
     providers: byProvider,
     budget: { day: budgetCounters.day, used: budgetCounters.used, limit: config.ai.dailyRequestBudget },
@@ -410,7 +508,21 @@ function getStatus() {
 /** One tiny live ping per provider (used by the "Test providers" button) */
 async function pingProviders() {
   const results = {};
-  for (const provider of ['gemini', 'groq']) {
+  for (const provider of ['gemini', 'groq', 'platform']) {
+    if (provider === 'platform') {
+      if (!config.ai.platformEnabled) {
+        results.platform = { ok: false, reason: 'Platform fallback disabled (PLATFORM_AI_DISABLED=true)' };
+        continue;
+      }
+      try {
+        const t0 = Date.now();
+        await callPlatform({ system: null, user: 'Reply with the single word: OK', jsonMode: false, timeoutMs: 20000 });
+        results.platform = { ok: true, model: 'glm-managed', latencyMs: Date.now() - t0 };
+      } catch (err) {
+        results.platform = { ok: false, reason: String(err.message).slice(0, 160) };
+      }
+      continue;
+    }
     const model = (config.providers[provider].models[0] || {}).id;
     if (!model) {
       results[provider] = { ok: false, reason: 'No model configured' };

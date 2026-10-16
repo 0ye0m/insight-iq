@@ -15,7 +15,7 @@ const { execFile } = require('child_process');
 const crypto = require('crypto');
 const config = require('../../config');
 const { ERROR_CODES, AppError } = require('../../utils/errorCodes');
-const { runTask, extractJson } = require('../ai/providerManager');
+const { runJSON } = require('../ai/providerManager');
 const aiCache = require('../ai/aiCache');
 const storage = require('../../storage/manager');
 const logger = require('../../utils/logger');
@@ -157,7 +157,7 @@ async function analyzeVideo(fileId, diskPath, fileName) {
   for (let i = 0; i < frames.length; i += 3) batches.push(frames.slice(i, i + 3));
   for (const batch of batches) {
     try {
-      const res = await runTask('vision', {
+      const res = await runJSON('vision', {
         system: FRAME_SYSTEM,
         user: `Describe these video frames. Timestamps: ${batch.map((f) => f.timestamp).join(', ')}. (Video: ${fileName})`,
         images: batch.map((f) => ({ mimeType: 'image/jpeg', base64: fs.readFileSync(f.path).toString('base64') })),
@@ -168,7 +168,7 @@ async function analyzeVideo(fileId, diskPath, fileName) {
       });
       provider = provider || res.provider;
       model = model || res.model;
-      const parsed = extractJson(res.text);
+      const parsed = res.data;
       for (const f of parsed.frames || []) frameDescriptions.push(f);
       // fill any missing frames with placeholders
       for (const f of batch) {
@@ -187,7 +187,7 @@ async function analyzeVideo(fileId, diskPath, fileName) {
   let synthesis = null;
   const hash = crypto.createHash('sha256').update(fileName + String(info.sizeBytes)).digest('hex').slice(0, 16);
   try {
-    const synthRes = await runTask('summary', {
+    const synthRes = await runJSON('summary', {
       system: SYNTH_SYSTEM,
       user: `VIDEO "${fileName}" (${info.durationSec}s, ${info.width}x${info.height}, audio: ${info.hasAudio ? 'yes' : 'no'}). FRAME DESCRIPTIONS:\n${JSON.stringify(frameDescriptions, null, 1)}\n\nSUBTITLES: ${subs.available ? (subs.text || '').slice(0, 6000) : 'none available'}\nTRANSCRIPT: ${transcript.available ? (transcript.text || '').slice(0, 6000) : `none (${transcript.reason || 'unavailable'})`}\n\nSynthesize the video JSON now.`,
       jsonMode: true,
@@ -197,7 +197,7 @@ async function analyzeVideo(fileId, diskPath, fileName) {
     });
     provider = provider || synthRes.provider;
     model = model || synthRes.model;
-    synthesis = extractJson(synthRes.text);
+    synthesis = synthRes.data;
   } catch (err) {
     aiError = aiError || String(err.message || err).slice(0, 300);
     synthesis = {

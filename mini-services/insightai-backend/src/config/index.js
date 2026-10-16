@@ -87,6 +87,11 @@ const config = {
     timeoutMs: parseInt(process.env.AI_TIMEOUT_MS, 10) || 45000,
     maxRetries: parseInt(process.env.AI_MAX_RETRIES, 10) || 2,
     dailyRequestBudget: parseInt(process.env.AI_DAILY_REQUEST_BUDGET, 10) || 2000,
+    // Managed platform provider (server-side, no user keys). Used as the LAST
+    // fallback when every Gemini/Groq key is unavailable (e.g. region-blocked).
+    // Set PLATFORM_AI_DISABLED=true to opt out and stay deterministic-only.
+    platformEnabled: process.env.PLATFORM_AI_DISABLED !== 'true',
+    nextHost: process.env.NEXT_HOST || 'http://127.0.0.1:3000',
   },
 
   rag: {
