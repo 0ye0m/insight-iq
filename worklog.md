@@ -60,3 +60,25 @@ Work Log:
 Stage Summary:
 - Application complete and verified end-to-end in the browser with REAL data and REAL computed results
 - AI providers are placeholders (user-supplied keys are dummy): Groq keys rejected (401), Gemini location-blocked from sandbox + retired model names → every AI layer correctly degrades to deterministic mode with clear UI messaging; system is production-ready for real keys via .env
+
+---
+Task ID: 11
+Agent: orchestrator (Z.ai Code)
+Task: Post-restart re-verification + regression fixes (env restore, Python path, chat superlative)
+
+Work Log:
+- Re-audited running state after sandbox restart: backend healthy but status=degraded (analyticsEngine=unavailable) and aiProviderKeys=0/0
+- Root cause 1: root .env lost the 6 AI key slots during environment restart (only DATABASE_URL remained)
+- Root cause 2: backend python auto-detection picked an interpreter without pandas (/usr/bin/python3 lacks pandas; /app/.venv is root-only)
+- Fixes: restored GEMINI_API_KEY_1..3 + GROQ_API_KEY_1..3 to root .env, pinned PYTHON_PATH=/home/z/.venv/bin/python3 (3.12.15 with pandas/numpy/scipy), created clean .env.example, added `!.env.example` negation to .gitignore
+- Health after restart: status=healthy, analyticsEngine=available, keys gemini:3 groq:3 (masked display verified)
+- Browser E2E regression caught: chat "Which category has the highest total sales?" returned plain aggregate (34,521.34, n=20) instead of per-category ranking
+- Root cause: analysis/query.py `_find_col` only checked column-name-in-text containment; "category" could not match column "Product_Category" (reverse containment missing)
+- Fixed query.py: new normalized bidirectional `_find_col` (boundary → forward-substring → reverse-substring, longest match wins), refactored superlative into `_superlative()` helper, added second phrasing pattern ("highest <metric> by/for <col>")
+- Unit tests: 4/4 pass (ranking correct, variant phrasing, no false match on absent column, find_col mapping)
+- Full browser E2E re-verified with agent-browser: dashboard (7 tabs + rehydrated registry), analyze (KPIs/charts/evidence), clean (reset → 2 ops detected → apply → 98.7→100, v5 created, v1 preserved), compare (v1 vs v5 honest schema diff + numeric stats), chat (Electronics 28,468.14 + full ranking), media (graceful AI-unavailable notice + privacy copy), upload (new q3_sales.csv → 10×5, quality 100)
+- Zero page errors, zero console errors; dev.log clean; provider keys handled with masked logging
+
+Stage Summary:
+- All regressions fixed; application verified end-to-end again in the browser
+- .env (git-ignored) holds the 6 user-supplied dummy keys; .env.example provides the clean template; swapping real keys in requires zero code changes

@@ -1,0 +1,11 @@
+Region,Product,Units,Revenue,Date
+North,Laptop,12,14400,2025-01-15
+South,Phone,30,21000,2025-01-18
+East,Tablet,8,5600,2025-02-02
+West,Laptop,15,18000,2025-02-10
+North,Phone,22,15400,2025-02-14
+South,Monitor,10,3500,2025-03-01
+East,Phone,27,18900,2025-03-07
+West,Tablet,11,7700,2025-03-15
+North,Monitor,14,4900,2025-03-22
+South,Laptop,9,10800,2025-04-03

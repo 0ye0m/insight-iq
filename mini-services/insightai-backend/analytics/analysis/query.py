@@ -143,18 +143,18 @@ def answer_query(df, question, type_map, stats, cfg):
     if m:
         by_col = _find_col(m.group(1), list(df.columns))
         val_col = _find_col(m.group(3), numeric_cols) or _find_col(m.group(3), list(df.columns))
-        direction = m.group(2)
-        if by_col and val_col and val_col != by_col:
-            work = df[[by_col, val_col]].copy()
-            work[val_col] = pd.to_numeric(work[val_col], errors='coerce')
-            grouped = work.groupby(work[by_col].fillna('Unknown').astype(str))[val_col].sum().sort_values(ascending=(direction in ('lowest', 'smallest', 'least', 'minimum')))
-            top = grouped.iloc[0] if len(grouped) else None
-            top_name = grouped.index[0] if len(grouped) else None
-            return {
-                'resolved': True, 'intent': 'superlative',
-                'answer': {'by': str(by_col), 'metric': str(val_col), 'direction': direction, 'topName': str(top_name), 'topValue': _r(top),
-                           'ranking': [{'name': str(i), 'value': _r(v)} for i, v in grouped.head(10).items()]},
-            }
+        result = _superlative(df, by_col, val_col, m.group(2))
+        if result:
+            return result
+
+    # superlative variant: highest <metric> by/for <col>  (e.g. "highest sales by category")
+    m = re.search(r'\b(highest|largest|most|maximum|lowest|smallest|least|minimum)\s+([a-z0-9_\- ]+?)\s+(?:by|per|across|for each)\s+([a-z0-9_\- ]+)', q)
+    if m:
+        val_col = _find_col(m.group(2), numeric_cols) or _find_col(m.group(2), list(df.columns))
+        by_col = _find_col(m.group(3), list(df.columns))
+        result = _superlative(df, by_col, val_col, m.group(1))
+        if result:
+            return result
 
     # aggregate of <col>: average/total/sum/max/min/count
     m = re.search(r'\b(average|mean|median|total|sum|max(?:imum)?|min(?:imum)?|count|number of)\b(?:\s+(?:value|values|of|for|in))?\s+([a-z0-9_\- ]+)', q)
@@ -174,19 +174,51 @@ def answer_query(df, question, type_map, stats, cfg):
     return {'resolved': False}
 
 
+def _superlative(df, by_col, val_col, direction):
+    """Group <by_col> and rank by summed <val_col>; returns None if columns invalid."""
+    if not by_col or not val_col or val_col == by_col:
+        return None
+    work = df[[by_col, val_col]].copy()
+    work[val_col] = pd.to_numeric(work[val_col], errors='coerce')
+    grouped = work.groupby(work[by_col].fillna('Unknown').astype(str))[val_col].sum().sort_values(
+        ascending=(direction in ('lowest', 'smallest', 'least', 'minimum')))
+    if not len(grouped):
+        return None
+    return {
+        'resolved': True, 'intent': 'superlative',
+        'answer': {'by': str(by_col), 'metric': str(val_col), 'direction': direction,
+                   'topName': str(grouped.index[0]), 'topValue': _r(grouped.iloc[0]),
+                   'ranking': [{'name': str(i), 'value': _r(v)} for i, v in grouped.head(10).items()]},
+    }
+
+
 def _find_col(text, candidates):
-    text = text.lower().strip()
-    best = None
+    """Match a user phrase to a column name.
+
+    Strategy (deterministic, no LLM):
+      1. exact normalized-phrase match with word boundaries
+      2. column name contained in the text      ('sales'  → 'total sales')
+      3. text contained in the column name      ('category' → 'product_category')
+    Underscores/whitespace are normalized on both sides. Longest match wins.
+    """
+    text_norm = re.sub(r'[\s_]+', ' ', str(text).lower().strip())
+    if not text_norm:
+        return None
+
+    def norm(name):
+        return re.sub(r'[\s_]+', ' ', str(name).lower().strip())
+
     for c in candidates:
-        cname = str(c).lower().strip()
-        if cname and re.search(r'(?<![a-z0-9_])' + re.escape(cname) + r'(?![a-z0-9_])', text):
+        cn = norm(c)
+        if cn and re.search(r'(?<![a-z0-9])' + re.escape(cn) + r'(?![a-z0-9])', text_norm):
             return c
-    for c in candidates:
-        cname = str(c).lower().strip()
-        if len(cname) >= 3 and cname in text:
-            if best is None or len(cname) > len(str(best).lower()):
-                best = c
-    return best
+    fwd = [c for c in candidates if len(norm(c)) >= 3 and norm(c) in text_norm]
+    if fwd:
+        return max(fwd, key=lambda c: len(norm(c)))
+    rev = [c for c in candidates if len(text_norm) >= 4 and text_norm in norm(c)]
+    if rev:
+        return max(rev, key=lambda c: len(norm(c)))
+    return None
 
 
 def _corr_word(r):
