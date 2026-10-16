@@ -1,0 +1,16 @@
+pandas>=2.2,<3
+numpy>=2.0,<3
+scipy>=1.13,<2
+chardet>=5.2,<6
+openpyxl>=3.1,<4
+xlrd>=2.0,<3
+odfpy>=1.4,<2
+pypdf>=5,<7
+pdfplumber>=0.11,<1
+python-docx>=1.1,<2
+python-pptx>=1.0,<2
+beautifulsoup4>=4.12,<5
+Pillow>=10,<12
+pytesseract>=0.3,<1
+pdf2image>=1.17,<2
+pyarrow>=16,<22

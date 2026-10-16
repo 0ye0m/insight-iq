@@ -1,0 +1,10 @@
+node_modules
+data/uploads
+data/processed
+data/media
+data/tmp
+analytics/**/__pycache__
+*.pyc
+.env
+.git
+*.log

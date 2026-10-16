@@ -45,6 +45,8 @@ local-*
 .claude
 .z-ai-config
 *.log
+**/__pycache__/
+*.pyc
 dev.log
 dev.out.log
 test
