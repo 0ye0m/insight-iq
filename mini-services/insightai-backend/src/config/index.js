@@ -60,14 +60,19 @@ const config = {
   providers: {
     gemini: {
       name: 'gemini',
-      keys: [process.env.GEMINI_API_KEY_1, process.env.GEMINI_API_KEY_2, process.env.GEMINI_API_KEY_3]
-        .filter((k) => k && k.trim() && !k.startsWith('YOUR_')),
+      keys: [
+        process.env.GEMINI_API_KEY_1,
+        process.env.GEMINI_API_KEY_2,
+        process.env.GEMINI_API_KEY_3,
+        process.env.GEMINI_API_KEY_4,
+        process.env.GEMINI_API_KEY_5,
+        process.env.GEMINI_API_KEY_6,
+      ].filter((k) => k && k.trim() && !k.startsWith('YOUR_')),
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
       models: [
         { id: 'gemini-3.8-flash', capabilities: ['text', 'json', 'vision'], contextTokens: 1048576, priority: 1 },
         { id: 'gemini-3.5-flash-lite', capabilities: ['text', 'json', 'vision'], contextTokens: 1048576, priority: 2 },
         { id: 'gemini-flash-latest', capabilities: ['text', 'json', 'vision'], contextTokens: 1048576, priority: 3 },
-        { id: 'gemini-2.0-flash', capabilities: ['text', 'json', 'vision'], contextTokens: 1048576, priority: 4 },
       ],
     },
     groq: {

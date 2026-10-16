@@ -108,3 +108,25 @@ Stage Summary:
 - Root cause of "key rejected": vendor geo-blocking of the sandbox's Hong Kong egress IP — NOT invalid keys and NOT an app bug
 - AI features now fully operational via the managed platform fallback; Gemini/Groq keys remain first in routing and take over automatically when the app runs from a supported region
 - Security: platform proxies are internal-only (shared secret), keys stay server-side and masked
+
+---
+Task ID: 12
+Agent: Z.ai Code (main)
+Task: Wire all 6 user-provided Gemini API keys accurately into the provider pool; fix misleading "key rejected" status; live-verify key validity
+
+Work Log:
+- Received 6 Gemini keys from user (slots 1-3 already present; 4-6 new). Wrote all 6 into git-ignored /home/z/my-project/.env (GEMINI_API_KEY_1..6)
+- Expanded config/index.js gemini.keys to 6 slots; replaced RETIRED model gemini-2.0-flash (Google now 404s it: "no longer available, use gemini-3.8-flash") with gemini-flash-latest in config + all TASK_ROUTES (planner/critic/vision/summary)
+- Live-probed all 6 keys against generativelanguage.googleapis.com using model-validation trick (retired-model 404 = auth passed): ALL 6 KEYS VALID/authenticated
+- Root-caused generation failure: sandbox egress IP 8.212.10.159 is Hong Kong; Google geo-blocks Gemini generation from HK ("User location is not supported", FAILED_PRECONDITION) on every endpoint/generation path tried (?key= param, x-goog-api-key header, Bearer/OpenAI-compat, Vertex AI express, header auth). Keys themselves fine; no proxy/alternate egress exists in sandbox; refused third-party relays for key safety
+- providerManager.js: switched Gemini auth from ?key= query param to x-goog-api-key header (keys never in URLs); added per-key validity state ('unknown'|'valid'|'invalid'); geo-block classification (FAILED_PRECONDITION or /location is not supported/) now marks key VALID + 15-min cooldown instead of generic failure; 401/403 → invalid; 404 model-retired → skip model without blaming key; pingProviders reports keyValid/regionBlocked with clear reason; getStatus exposes validity per key
+- Fixed pre-existing ERR_ERL_PERMISSIVE_TRUST_PROXY crash: app.js trust proxy true → 1 (single Caddy hop), express-rate-limit v7 validation now passes
+- UI: types.ts ProviderKeyStatus + validity; DashboardView renders "6 key slots · region-blocked", red dot only when ALL keys invalid, explanatory note; removed misleading "key rejected" for geo-blocked keys
+- .env.example updated to 6 Gemini slots
+- Restarted backend; verified health (gemini:6, groq:3, python 3.12.15 available), providers/status (6 slots masked, validity tracked), POST /api/providers/test (gemini: keyValid=true+regionBlocked=true; groq slot1 403 invalid; platform OK 371ms)
+- E2E chat: deterministic superlative Q → exact ranking (Electronics 28,468.14) with badge; AI-path Q → ai-context answer via platform fallback (all 6 gemini keys auto-probed then marked valid); both rendered in browser, zero console/page errors; lint clean
+
+Stage Summary:
+- All 6 Gemini keys are loaded, valid, and pooled (6 slots, round-robin, header auth, masked)
+- Google geo-blocks generation from the server's Hong Kong egress — the ONLY remaining blocker, external to the app; keys are classified "region-blocked (key valid)" and auto-engage from any supported egress; managed platform fallback keeps every AI feature live meanwhile
+- AI-path chat, deterministic chat, provider status UI, and backend startup all browser/log verified with zero errors

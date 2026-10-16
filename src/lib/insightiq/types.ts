@@ -20,6 +20,7 @@ export interface HealthData {
 export interface ProviderKeyStatus {
   slot: number;
   masked: string;
+  validity?: 'unknown' | 'valid' | 'invalid';
   requests: number;
   tokensIn: number;
   tokensOut: number;

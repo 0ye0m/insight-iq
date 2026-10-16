@@ -2,11 +2,16 @@
 
 /**
  * Provider-independent AI gateway.
- * - Gemini + Groq, 3 server-side key slots each (GEMINI_API_KEY_1..3 / GROQ_API_KEY_1..3)
+ * - Gemini (6 server-side key slots: GEMINI_API_KEY_1..6) + Groq (3 slots: GROQ_API_KEY_1..3)
  * - Capability-based routing (text / json / vision) per task type
- * - Per-key request accounting, cooldown on 429 (honours retry-after), exponential backoff with jitter
+ * - Per-key request accounting, validity tracking, cooldown on 429 (honours retry-after),
+ *   exponential backoff with jitter
  * - Round-robin rotation between keys of the same provider, then fallback to the other provider
- * - Never logs or exposes raw keys (masked form only)
+ * - Geo-block awareness: "User location is not supported" (FAILED_PRECONDITION) means the KEY is
+ *   valid but this server's egress region is blocked by Google — keys are kept valid and retried
+ *   after a cooldown, and the platform fallback serves AI meanwhile.
+ * - Never logs or exposes raw keys (masked form only); Gemini auth uses the x-goog-api-key header
+ *   (keys never appear in URLs).
  */
 
 const crypto = require('crypto');
@@ -44,6 +49,7 @@ function buildKeyStates() {
         tokensIn: 0,
         tokensOut: 0,
         errors429: 0,
+        validity: 'unknown', // 'unknown' | 'valid' | 'invalid' — auth-probed, never exposed raw
         cooldownUntil: 0,
         lastError: null,
         lastUsedAt: null,
@@ -76,7 +82,7 @@ const TASK_ROUTES = {
     { provider: 'groq', model: 'llama-3.3-70b-versatile', caps: ['json'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['json'] },
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['json'] },
-    { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['json'] },
+    { provider: 'gemini', model: 'gemini-flash-latest', caps: ['json'] },
     PLATFORM_TEXT,
   ],
   explainer: [
@@ -89,7 +95,7 @@ const TASK_ROUTES = {
   critic: [
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['json'] },
     { provider: 'groq', model: 'llama-3.3-70b-versatile', caps: ['json'] },
-    { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['json'] },
+    { provider: 'gemini', model: 'gemini-flash-latest', caps: ['json'] },
     PLATFORM_TEXT,
   ],
   chat: [
@@ -103,13 +109,13 @@ const TASK_ROUTES = {
     { provider: 'gemini', model: 'gemini-3.8-flash', caps: ['vision', 'json'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['vision', 'json'] },
     { provider: 'groq', model: 'meta-llama/llama-4-scout-17b-16e-instruct', caps: ['vision'] },
-    { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['vision', 'json'] },
+    { provider: 'gemini', model: 'gemini-flash-latest', caps: ['vision', 'json'] },
     PLATFORM_VISION,
   ],
   summary: [
     { provider: 'groq', model: 'llama-3.1-8b-instant', caps: ['text'] },
     { provider: 'gemini', model: 'gemini-3.5-flash-lite', caps: ['text'] },
-    { provider: 'gemini', model: 'gemini-2.0-flash', caps: ['text'] },
+    { provider: 'gemini', model: 'gemini-flash-latest', caps: ['text'] },
     PLATFORM_TEXT,
   ],
 };
@@ -160,10 +166,10 @@ async function callGemini({ key, model, system, user, images, jsonMode, temperat
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (jsonMode) body.generationConfig.responseMimeType = 'application/json';
 
-  const url = `${config.providers.gemini.baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  const url = `${config.providers.gemini.baseUrl}/models/${model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -401,15 +407,26 @@ async function runTask(taskType, { system, user, images = [], jsonMode = false, 
           ks.tokensIn += result.tokensIn;
           ks.tokensOut += result.tokensOut;
           ks.lastError = null;
+          ks.validity = 'valid';
           ks.consecutiveFailures = 0;
         }
         logger.info({ task: label, provider: cand.provider, model: cand.model, key: ks ? ks.id : 'managed', tokensIn: result.tokensIn, tokensOut: result.tokensOut }, 'AI call ok');
         return { text: result.text, provider: cand.provider, model: cand.model, keyId: ks ? ks.id : 'managed' };
       } catch (err) {
         const status = err.status || 0;
-        attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks ? ks.id : 'managed'}`, attempt, error: String(err.message).slice(0, 160), status });
-        logger.warn({ task: label, provider: cand.provider, model: cand.model, key: ks ? ks.id : 'managed', status, attempt, error: String(err.message).slice(0, 200) }, 'AI call failed');
+        const msg = String(err.message || '');
+        const geoBlocked = err.detailCode === 'FAILED_PRECONDITION' || /location is not supported/i.test(msg);
+        attempts.push({ candidate: `${cand.provider}/${cand.model}#${ks ? ks.id : 'managed'}`, attempt, error: msg.slice(0, 160), status });
+        logger.warn({ task: label, provider: cand.provider, model: cand.model, key: ks ? ks.id : 'managed', status, attempt, geoBlocked, error: msg.slice(0, 200) }, 'AI call failed');
 
+        if (ks && geoBlocked) {
+          // Auth already passed (Google validates the key before the geo check) —
+          // the KEY is valid; only this server's egress region is blocked.
+          ks.validity = 'valid';
+          ks.lastError = { message: 'region-blocked (key valid)', at: new Date().toISOString(), hardInvalid: false, geoBlocked: true };
+          ks.cooldownUntil = Date.now() + 15 * 60 * 1000; // re-check in 15 min — do not hammer a doomed route
+          break; // move to next key/model
+        }
         if (ks && status === 429) {
           ks.errors429 += 1;
           const ra = err.retryAfter && err.retryAfter > 0 ? err.retryAfter * 1000 : Math.min(60000, 5000 * Math.pow(2, ks.errors429));
@@ -418,8 +435,13 @@ async function runTask(taskType, { system, user, images = [], jsonMode = false, 
           break; // move to next key/model — do not hammer the same key
         }
         if (ks && (status === 401 || status === 403)) {
+          ks.validity = 'invalid';
           ks.lastError = { message: 'key rejected', at: new Date().toISOString(), hardInvalid: true };
           break; // invalid key — stop using it
+        }
+        if (status === 404 && /no longer available/i.test(msg)) {
+          // Retired model — a config concern, not a key concern; try the next model candidate.
+          break;
         }
         if (status === 400 && err.blocked) {
           ks.lastError = { message: 'content blocked', at: new Date().toISOString(), hardInvalid: false };
@@ -480,6 +502,7 @@ function getStatus() {
         .map((k) => ({
           slot: k.keyIndex + 1,
           masked: k.masked,
+          validity: k.validity,
           requests: k.requests,
           tokensIn: k.tokensIn,
           tokensOut: k.tokensOut,
@@ -539,13 +562,33 @@ async function pingProviders() {
       await fn({ key: ks.key, model, system: null, user: 'Reply with the single word: OK', jsonMode: false, temperature: 0, maxTokens: 8, timeoutMs: 15000 });
       results[provider] = { ok: true, model, latencyMs: Date.now() - t0, keySlot: ks.keyIndex + 1 };
       ks.requests += 1;
+      ks.validity = 'valid';
     } catch (err) {
-      results[provider] = { ok: false, reason: String(err.message).slice(0, 160), keySlot: ks.keyIndex + 1 };
-      if (err.status === 429) {
-        ks.cooldownUntil = Date.now() + ((err.retryAfter || 30) * 1000);
-        ks.errors429 += 1;
+      const msg = String(err.message || '');
+      const geoBlocked = err.detailCode === 'FAILED_PRECONDITION' || /location is not supported/i.test(msg);
+      if (geoBlocked) {
+        // Auth passed (Google validates the key before the geo check) — key is valid,
+        // but this server's egress region is blocked by Google for AI generation.
+        ks.validity = 'valid';
+        ks.lastError = { message: 'region-blocked (key valid)', at: new Date().toISOString(), hardInvalid: false, geoBlocked: true };
+        results[provider] = {
+          ok: false,
+          keyValid: true,
+          regionBlocked: true,
+          keySlot: ks.keyIndex + 1,
+          reason: "Keys are valid — this server's egress region is blocked by Google ('User location is not supported'). Keys auto-engage from a supported region; platform fallback is serving AI meanwhile.",
+        };
+      } else {
+        results[provider] = { ok: false, reason: msg.slice(0, 160), keySlot: ks.keyIndex + 1 };
+        if (err.status === 429) {
+          ks.cooldownUntil = Date.now() + ((err.retryAfter || 30) * 1000);
+          ks.errors429 += 1;
+        }
+        if (err.status === 401 || err.status === 403) {
+          ks.validity = 'invalid';
+          ks.lastError = { message: 'key rejected', at: new Date().toISOString(), hardInvalid: true };
+        }
       }
-      if (err.status === 401 || err.status === 403) ks.lastError = { message: 'key rejected', at: new Date().toISOString(), hardInvalid: true };
     }
   }
   return results;

@@ -15,7 +15,10 @@ ensureDirs();
 
 const app = express();
 
-app.set('trust proxy', true);
+// Single reverse-proxy hop (Caddy gateway) — a numeric trust proxy satisfies
+// express-rate-limit v7's validation (ERR_ERL_PERMISSIVE_TRUST_PROXY) while
+// still reading the real client IP from X-Forwarded-For.
+app.set('trust proxy', 1);
 
 app.use(helmet);
 app.use(cors);

@@ -116,24 +116,34 @@ export default function DashboardView() {
                 <Skeleton className="h-10 w-2/3 rounded-md bg-muted" />
               ) : providers ? (
                 <div className="space-y-1.5">
-                  {Object.entries(providers.providers).map(([name, info]) => (
-                    <p key={name} className="flex items-center gap-2 text-sm capitalize">
-                      <StatusDot tone={info.configured ? 'orange' : 'gray'} />
-                      {name}
-                      <span className="text-xs text-muted-foreground">
-                        {info.mode === 'managed-fallback'
-                          ? info.configured
-                            ? 'managed fallback · ready'
-                            : 'disabled'
-                          : info.configured
-                            ? `${info.keys.length} key slot${info.keys.length === 1 ? '' : 's'}`
-                            : 'not configured'}
-                        {info.keys.some((k) => k.coolingDown) ? ' · cooling down' : ''}
-                        {info.keys.some((k) => k.lastError === 'key rejected') ? ' · key rejected' : ''}
-                      </span>
-                    </p>
-                  ))}
-                  <p className="pt-1 text-xs text-muted-foreground">Keys masked server-side — never exposed to the browser.</p>
+                  {Object.entries(providers.providers).map(([name, info]) => {
+                    const keys = info.keys || [];
+                    const invalidCount = keys.filter((k) => k.validity === 'invalid').length;
+                    const regionBlocked = keys.some((k) => (k.lastError || '').includes('region-blocked'));
+                    const validOk = keys.some((k) => k.validity === 'valid' && !k.coolingDown && !k.lastError);
+                    return (
+                      <p key={name} className="flex items-center gap-2 text-sm capitalize">
+                        <StatusDot tone={info.configured ? (invalidCount === keys.length && keys.length > 0 ? 'red' : 'orange') : 'gray'} />
+                        {name}
+                        <span className="text-xs text-muted-foreground">
+                          {info.mode === 'managed-fallback'
+                            ? info.configured
+                              ? 'managed fallback · ready'
+                              : 'disabled'
+                            : info.configured
+                              ? `${info.keys.length} key slot${info.keys.length === 1 ? '' : 's'}`
+                              : 'not configured'}
+                          {validOk ? ' · keys verified' : ''}
+                          {regionBlocked ? ' · region-blocked' : ''}
+                          {invalidCount > 0 ? ` · ${invalidCount} rejected` : ''}
+                          {keys.some((k) => k.coolingDown) ? ' · cooling down' : ''}
+                        </span>
+                      </p>
+                    );
+                  })}
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    Keys masked server-side — never exposed to the browser. Region-blocked keys are verified valid and auto-engage from a supported egress; the managed fallback keeps AI live meanwhile.
+                  </p>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">—</p>
