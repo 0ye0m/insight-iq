@@ -1,0 +1,24 @@
+{
+  "name": "insightai-backend",
+  "version": "2.0.0",
+  "description": "InsightIQ - AI-assisted data analytics platform backend (Express + Python analytics engine)",
+  "main": "index.js",
+  "scripts": {
+    "dev": "bun --hot index.js",
+    "start": "bun index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.2",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

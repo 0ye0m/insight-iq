@@ -1,0 +1,203 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ─── InsightIQ design tokens (from design-universal reference) ─── */
+:root {
+  --radius: 0.75rem;
+
+  /* Light mode: neutral white/light-gray surfaces, burnt-orange primary, mint accent */
+  --background: #f7f7f8;
+  --foreground: #1b1b1f;
+  --card: #ffffff;
+  --card-foreground: #1b1b1f;
+  --popover: #ffffff;
+  --popover-foreground: #1b1b1f;
+  --primary: #c2410c;              /* burnt orange */
+  --primary-foreground: #fff7ed;   /* cream */
+  --secondary: #f5efe6;            /* warm beige */
+  --secondary-foreground: #44403c;
+  --muted: #efefee;
+  --muted-foreground: #71717a;
+  --accent: #4ade80;               /* mint green */
+  --accent-foreground: #052e16;
+  --destructive: #dc2626;
+  --success: #16a34a;
+  --success-foreground: #f0fdf4;
+  --warning: #d97706;
+  --border: #e5e5e3;
+  --input: #e4e4e7;
+  --ring: #c2410c;
+  --chart-1: #c2410c;
+  --chart-2: #10b981;
+  --chart-3: #d97706;
+  --chart-4: #ef4444;
+  --chart-5: #0d9488;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b1b1f;
+  --sidebar-primary: #c2410c;
+  --sidebar-primary-foreground: #fff7ed;
+  --sidebar-accent: #f5efe6;
+  --sidebar-accent-foreground: #44403c;
+  --sidebar-border: #e5e5e3;
+  --sidebar-ring: #c2410c;
+  --gradient-primary: linear-gradient(135deg, #b8400e 0%, #ea580c 100%);
+  --gradient-soft: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  --noise-dot: #d4d4d1;
+}
+
+.dark {
+  /* Dark mode: dark navy/charcoal surfaces, bright orange primary */
+  --background: #0b1220;
+  --foreground: #f1f5f9;
+  --card: #101a2c;
+  --card-foreground: #f1f5f9;
+  --popover: #101a2c;
+  --popover-foreground: #f1f5f9;
+  --primary: #f97316;
+  --primary-foreground: #200f04;
+  --secondary: #1c2740;
+  --secondary-foreground: #e2e8f0;
+  --muted: #16213a;
+  --muted-foreground: #94a3b8;
+  --accent: #34d399;
+  --accent-foreground: #032b1d;
+  --destructive: #dc2626;
+  --success: #34d399;
+  --success-foreground: #032b1d;
+  --warning: #f59e0b;
+  --border: #223049;
+  --input: #1c2740;
+  --ring: #fb923c;
+  --chart-1: #f97316;
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #f87171;
+  --chart-5: #2dd4bf;
+  --sidebar: #0d1526;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #200f04;
+  --sidebar-accent: #1c2740;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #223049;
+  --sidebar-ring: #fb923c;
+  --gradient-primary: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  --gradient-soft: linear-gradient(135deg, #1c2740 0%, #16213a 100%);
+  --noise-dot: #223049;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ─── Custom InsightIQ utilities ─── */
+
+/* Subtle dotted texture used on hero/panel backgrounds */
+.site-noise {
+  background-image: radial-gradient(var(--noise-dot) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* Orange gradient primary action */
+.btn-gradient-primary {
+  background-image: var(--gradient-primary);
+  color: var(--primary-foreground);
+}
+.btn-gradient-primary:hover {
+  filter: brightness(1.06);
+}
+
+/* Eyebrow / section kicker: orange line + uppercase label */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.kicker::before {
+  content: "";
+  display: inline-block;
+  width: 2rem;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 999px;
+}
+
+/* Custom scrollbars for long lists */
+.scroll-slim::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  border-radius: 999px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+}
+
+/* Status dot pulse */
+@keyframes insight-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.dot-live {
+  animation: insight-pulse 2s ease-in-out infinite;
+}
