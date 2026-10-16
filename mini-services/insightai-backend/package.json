@@ -4,8 +4,8 @@
   "description": "InsightIQ - AI-assisted data analytics platform backend (Express + Python analytics engine)",
   "main": "index.js",
   "scripts": {
-    "dev": "bun --hot index.js",
-    "start": "bun index.js"
+    "dev": "node --watch index.js",
+    "start": "node index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
