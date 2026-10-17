@@ -16,6 +16,11 @@ const { registry } = require('../fileProcessing.service');
 const storage = require('../../storage/manager');
 const aiCache = require('./aiCache');
 
+const CALCULATION_SYSTEM = `You translate a user's dataset question into one safe deterministic query.
+Use ONLY columns from the schema and ONLY these query forms: row count; total/average/median/min/max of COLUMN; count of COLUMN; distribution of COLUMN; grouped by COLUMN with aggregate of COLUMN; top N COLUMN by COLUMN; highest/lowest COLUMN by COLUMN; correlation between COLUMN and COLUMN; trend of COLUMN over COLUMN; missing values; duplicates; schema.
+Return ONLY JSON: {"calculable":true,"query":"canonical query"} or {"calculable":false,"reason":"brief reason"}.
+Never answer with a number yourself. Never invent a column. If the question needs arithmetic that the listed forms cannot safely express, return calculable=false.`;
+
 const CHAT_SYSTEM = `You are InsightIQ's data assistant. Answer ONLY from the evidence provided in the context below.
 
 Rules:
@@ -60,6 +65,23 @@ async function chat({ fileId, question, history = [], mediaEvidence = null }) {
         intent: deterministic.intent,
         answerData: deterministic.answer,
       };
+    }
+
+    // A narrow AI translation layer handles natural-language calculation
+    // requests, but Python still performs the calculation and supplies the
+    // answer. The model never gets to invent numeric results.
+    const calculation = await translateCalculation(q, profile, fileId, version);
+    if (calculation && calculation.calculable && calculation.query) {
+      const calculated = await invokePython('query', { fileId, version, question: calculation.query }).catch(() => ({ data: { resolved: false } }));
+      if (calculated.data && calculated.data.resolved) {
+        return {
+          answer: formatDeterministicAnswer(calculated.data, q),
+          sources: [`dataset:${fileId}#v${version}`, `intent:${calculated.data.intent}`, 'calculation:ai-translated'],
+          grounded: 'calculated-ai-route',
+          intent: calculated.data.intent,
+          answerData: calculated.data.answer,
+        };
+      }
     }
 
     // LLM grounded answer from schema + samples + quality
@@ -156,6 +178,25 @@ async function chat({ fileId, question, history = [], mediaEvidence = null }) {
   throw new AppError(ERROR_CODES.INVALID_DATASET, { detail: `Unsupported file type for chat: ${fileType}` });
 }
 
+async function translateCalculation(question, profile, fileId, version) {
+  if (!profile || !Array.isArray(profile.columns)) return null;
+  const schema = profile.columns.map((c) => `${c.name} (${c.semanticType})`).join(', ');
+  const payload = { op: 'chat_calculation_translation', hash: `${fileId}#v${version}`, question, schema };
+  try {
+    const res = await aiCache.cachedRunJSON('chat_calculation_translation', 'chat', payload, {
+      system: CALCULATION_SYSTEM,
+      user: `SCHEMA: ${schema}\nUSER QUESTION: ${question}\nTranslate only if it is a supported deterministic calculation.`,
+      temperature: 0,
+      maxTokens: 180,
+      label: 'chat-calculation-translation',
+    });
+    return res.data && typeof res.data === 'object' ? res.data : null;
+  } catch (err) {
+    logger.info({ fileId, error: String(err.message || err).slice(0, 160) }, 'Calculation translation unavailable');
+    return null;
+  }
+}
+
 function historyText(history) {
   const recent = (history || []).slice(-4);
   if (recent.length === 0) return '';
@@ -168,17 +209,20 @@ function formatDeterministicAnswer(det, question) {
   const lines = [];
   switch (det.intent) {
     case 'aggregate':
-      lines.push(`**${a.aggregate} of ${a.column}: ${fmtNum(a.value)}** (n=${a.n})`);
+      lines.push(`### ${titleCase(a.aggregate)} of ${a.column}`);
+      lines.push(`**${fmtNum(a.value)}**`);
+      if (a.n !== undefined) lines.push(`Based on ${a.n} non-empty values.`);
       break;
     case 'row_count':
-      lines.push(`The dataset contains **${a.rowCount} rows** across ${a.columnCount} columns.`);
+      lines.push('### Dataset size');
+      lines.push(`**${a.rowCount} rows** across **${a.columnCount} columns**.`);
       break;
     case 'schema':
       lines.push(`The dataset has **${a.rowCount} rows** and ${a.columns.length} columns:`);
       for (const c of a.columns.slice(0, 20)) lines.push(`- ${c.name} — ${c.type}${c.missingPct ? ` (${c.missingPct}% missing)` : ''}`);
       break;
     case 'group_by':
-      lines.push(`**${a.metric} by ${a.by}** (${a.aggregate}):`);
+      lines.push(`### ${titleCase(a.aggregate)} ${a.metric} by ${a.by}`);
       for (const v of a.values.slice(0, 10)) lines.push(`- ${v.name}: ${fmtNum(v.value)}`);
       break;
     case 'superlative': {
@@ -196,7 +240,9 @@ function formatDeterministicAnswer(det, question) {
       for (const v of a.values.slice(0, 10)) lines.push(`- ${v.name}: ${fmtNum(v.value)}`);
       break;
     case 'correlation':
-      lines.push(`Correlation between **${a.columnA}** and **${a.columnB}**: **${a.pearson}** (${a.interpretation}, n=${a.n}). This is an association, not causation.`);
+      lines.push('### Correlation');
+      lines.push(`**${a.columnA}** vs **${a.columnB}**: **${a.pearson}** (${a.interpretation}, n=${a.n}).`);
+      lines.push('This is an association, not causation.');
       break;
     case 'correlation_matrix':
       lines.push('Strongest numeric correlations:');
@@ -234,6 +280,10 @@ function fmtNum(v) {
   if (v === null || v === undefined) return 'n/a';
   if (typeof v !== 'number') return String(v);
   return v.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
+function titleCase(value) {
+  return String(value || '').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 module.exports = { chat };
