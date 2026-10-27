@@ -173,9 +173,7 @@ The DWBI recording input is also shown here:
 
 ![DWBI question video input](./media/dwbi-queppr-input.jpeg)
 
-### Additional captured screen
 
-![Additional InsightIQ screen](./media/WhatsApp%20Image%202026-10-18%20at%2013.50.45.jpeg)
 
 ---
 
