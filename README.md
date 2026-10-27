@@ -143,7 +143,7 @@ The repository includes captured examples of the current product experience. Ima
 
 ![Tulsi image analysis output](./media/tulsi-img-output1.jpeg)
 
-![Additional Tulsi image analysis output](./media/tulsi-img-output2.jpeg)
+![Additional Tulsi image analysis output with follow up question](./media/tulsi-img-output2.jpeg)
 
 ### YouTube and link analysis
 
@@ -154,25 +154,27 @@ The repository includes captured examples of the current product experience. Ima
 #### Hills scenery input
 
 <video controls width="100%">
-  <source src="https://raw.githubusercontent.com/0ye0m/insight-iq/main/media/hills-scenery-input.mp4" type="video/mp4">
+  <source src="https://github.com/user-attachments/assets/5483c022-976b-4daf-832e-d1b101876e45" type="video/mp4">
 </video>
 
 #### Hills scenery analysis output
 
 <video controls width="100%">
-  <source src="https://raw.githubusercontent.com/0ye0m/insight-iq/main/media/hills-scenery-output.mp4" type="video/mp4">
+  <source src="https://github.com/user-attachments/assets/add6dfe0-8ce0-40a4-b379-08ec5770ffb4" type="video/mp4">
 </video>
+
+
+#### The DWBI recording input:
+
+![DWBI question video input](./media/dwbi-queppr-input.jpeg)
+
+
 
 #### DWBI question analysis output
 
 <video controls width="100%">
-  <source src="https://raw.githubusercontent.com/0ye0m/insight-iq/main/media/dwbi-queppr-output.mp4" type="video/mp4">
+  <source src="https://github.com/user-attachments/assets/1d7b732c-23d1-4271-a5d1-461b69755cb1" type="video/mp4">
 </video>
-
-The DWBI recording input is also shown here:
-
-![DWBI question video input](./media/dwbi-queppr-input.jpeg)
-
 
 
 ---
@@ -204,8 +206,8 @@ The frontend is a responsive Next.js application. The backend combines an Expres
 ### Frontend
 
 ```bash
-bun install
-bun run dev
+npm install
+npm run dev
 ```
 
 The frontend runs on [http://localhost:3000](http://localhost:3000).
@@ -214,9 +216,9 @@ The frontend runs on [http://localhost:3000](http://localhost:3000).
 
 ```bash
 cd mini-services/insightai-backend
-bun install
+npm install
 pip install -r requirements.txt
-bun run dev
+npm run dev
 ```
 
 The backend requires Node.js 18 or newer and Python with the packages listed in `mini-services/insightai-backend/requirements.txt`.
