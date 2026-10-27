@@ -155,11 +155,15 @@ Captured examples of the current product experience across analysis, cleaning, i
 
 #### Hills scenery: input
 
-<video src="./media/hills-scenery-input.mp4" controls muted playsinline preload="metadata" width="100%"></video>
+<video src="https://github.com/user-attachments/assets/f0090dff-dbe2-451c-8999-fc3a87600f30" controls muted playsinline preload="metadata" width="100%"></video>
+
+▶️ [Watch the video directly](https://github.com/user-attachments/assets/f0090dff-dbe2-451c-8999-fc3a87600f30)
 
 #### Hills scenery: analysis output
 
-<video src="./media/hills-scenery-output.mp4" controls muted playsinline preload="metadata" width="100%"></video>
+<video src="https://github.com/user-attachments/assets/c64ba237-0634-4ed2-82d7-eb89f4b982a4" controls muted playsinline preload="metadata" width="100%"></video>
+
+▶️ [Watch the video directly](https://github.com/user-attachments/assets/c64ba237-0634-4ed2-82d7-eb89f4b982a4)
 
 #### DWBI question paper: input
 
@@ -167,7 +171,9 @@ Captured examples of the current product experience across analysis, cleaning, i
 
 #### DWBI question paper: analysis output
 
-<video src="./media/dwbi-queppr-output.mp4" controls muted playsinline preload="metadata" width="100%"></video>
+<video src="https://github.com/user-attachments/assets/daceae63-a776-4027-ae41-aaa93b6efacb" controls muted playsinline preload="metadata" width="100%"></video>
+
+▶️ [Watch the video directly](https://github.com/user-attachments/assets/daceae63-a776-4027-ae41-aaa93b6efacb)
 
 ---
 
