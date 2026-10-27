@@ -12,6 +12,8 @@ It combines a deterministic analytics engine with an evidence-grounded AI layer:
 
 No mocked dashboards. No unexplained numbers. Upload your data, understand what is inside it, improve its quality, compare versions, and ask questions in plain language.
 
+**Contents:** [Product tour](#see-insightiq-in-action) · [Capabilities](#what-you-can-do) · [Media demos](#media-demos) · [How it works](#how-it-works) · [Run locally](#run-locally) · [Built with](#built-with)
+
 ---
 
 ## See InsightIQ in action
@@ -121,7 +123,7 @@ Ask natural-language questions about datasets, documents, and media. Answers are
 
 ## Media demos
 
-The repository includes captured examples of the current product experience. Images are embedded individually so GitHub renders them as direct previews instead of relying on a table layout.
+Captured examples of the current product experience across analysis, cleaning, image understanding, and video analysis.
 
 ### Product workflow
 
@@ -149,33 +151,23 @@ The repository includes captured examples of the current product experience. Ima
 
 ![InsightIQ YouTube analysis](./media/youtube-deepanalyis.png)
 
-### Video recordings
+### Video analysis
 
-#### Hills scenery input
+#### Hills scenery: input
 
-<video controls width="100%">
-  <source src="https://github.com/user-attachments/assets/5483c022-976b-4daf-832e-d1b101876e45" type="video/mp4">
-</video>
+<video src="https://github.com/user-attachments/assets/5483c022-976b-4daf-832e-d1b101876e45" controls muted width="100%"></video>
 
-#### Hills scenery analysis output
+#### Hills scenery: analysis output
 
-<video controls width="100%">
-  <source src="https://github.com/user-attachments/assets/add6dfe0-8ce0-40a4-b379-08ec5770ffb4" type="video/mp4">
-</video>
+<video src="https://github.com/user-attachments/assets/add6dfe0-8ce0-40a4-b379-08ec5770ffb4" controls muted width="100%"></video>
 
-
-#### The DWBI recording input:
+#### DWBI question paper: input
 
 ![DWBI question video input](./media/dwbi-queppr-input.jpeg)
 
+#### DWBI question paper: analysis output
 
-
-#### DWBI question analysis output
-
-<video controls width="100%">
-  <source src="https://github.com/user-attachments/assets/1d7b732c-23d1-4271-a5d1-461b69755cb1" type="video/mp4">
-</video>
-
+<video src="https://github.com/user-attachments/assets/1d7b732c-23d1-4271-a5d1-461b69755cb1" controls muted width="100%"></video>
 
 ---
 
