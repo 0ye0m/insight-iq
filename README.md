@@ -155,11 +155,11 @@ Captured examples of the current product experience across analysis, cleaning, i
 
 #### Hills scenery: input
 
-<video src="https://github.com/user-attachments/assets/5483c022-976b-4daf-832e-d1b101876e45" controls muted width="100%"></video>
+<video src="./media/hills-scenery-input.mp4" controls muted playsinline preload="metadata" width="100%"></video>
 
 #### Hills scenery: analysis output
 
-<video src="https://github.com/user-attachments/assets/add6dfe0-8ce0-40a4-b379-08ec5770ffb4" controls muted width="100%"></video>
+<video src="./media/hills-scenery-output.mp4" controls muted playsinline preload="metadata" width="100%"></video>
 
 #### DWBI question paper: input
 
@@ -167,7 +167,7 @@ Captured examples of the current product experience across analysis, cleaning, i
 
 #### DWBI question paper: analysis output
 
-<video src="https://github.com/user-attachments/assets/1d7b732c-23d1-4271-a5d1-461b69755cb1" controls muted width="100%"></video>
+<video src="./media/dwbi-queppr-output.mp4" controls muted playsinline preload="metadata" width="100%"></video>
 
 ---
 
